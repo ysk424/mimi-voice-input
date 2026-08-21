@@ -1,6 +1,50 @@
 # mimi
 
-GPT や Codex に渡す文章を、送信前に落ち着いて整えるための小さな Windows 音声入力メモです。
+GPT や Codex に渡す文章を音声入力するための小さなツールです。
+
+- macOS: Swift製CLI。Enterで録音を終え、文字起こしを標準出力とクリップボードへ送ります
+- Windows: PTT付きの編集ウィンドウと通知領域アイコンを備えた音声入力メモです
+
+## macOS版（CLI）
+
+macOS 13以降とXcode Command Line Toolsが必要です。Pythonや常駐プロセスは使用しません。
+
+### インストール
+
+次を実行します。
+
+```sh
+./macos/install.sh
+mimi --check
+```
+
+`~/.local/bin` が `PATH` に含まれていない場合は、シェルの設定へ追加してください。
+
+### 使い方
+
+```sh
+mimi
+```
+
+起動と同時に録音が始まります。話し終えたら Enter を押してください。文字起こし結果だけを標準出力へ出し、同じ内容をクリップボードにもコピーします。録音は最長60秒、API通信は最長90秒です。
+
+manoからは次のように使えます。
+
+1. `Ctrl-T` を押す
+2. `mimi` と入力して Enterを押す
+3. 開始音のあとに話す
+4. Enterを押して録音を終える
+5. 文字起こし結果がカーソル位置へ入る
+
+初回はmacOSからマイク使用の確認が表示されます。「ターミナル」を許可してください。状態は `mimi --check` で確認できます。
+
+APIキーは `jh` と同じものを使います。環境変数 `OPENAI_API_KEY`、なければ `~/.env` の `OPENAI_API_KEY` の順で読みます。
+
+モデルと文字起こし用ヒントは、Windows版と同様に `MIMI_TRANSCRIBE_MODEL` と `MIMI_TRANSCRIBE_PROMPT` で変更できます。
+
+## Windows版
+
+GPT や Codex に渡す文章を、送信前に落ち着いて整えるための小さなWindows音声入力メモです。
 
 - 400文字まで直接編集
 - PTT（押している間だけ録音）
