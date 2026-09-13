@@ -45,7 +45,7 @@ private enum MimiError: LocalizedError {
         case .microphoneUnavailable:
             return "マイクの使用許可を確認できませんでした。"
         case .terminalRequired:
-            return "mimi は端末から実行してください。録音終了には Enter を使います。"
+            return "mi は端末から実行してください。録音終了には任意のキーを使います。"
         case .recordingFailed:
             return "録音を開始できませんでした。"
         case .recordingTooShort:
@@ -71,7 +71,7 @@ private enum MimiError: LocalizedError {
 }
 
 private enum StopReason {
-    case enter
+    case key
     case timeout
 }
 
@@ -104,7 +104,7 @@ private struct MimiCommand {
             }
 
             if arguments == ["--version"] || arguments == ["-V"] {
-                print("mimi \(version) (macOS)")
+                print("mi \(version) (macOS)")
                 return
             }
 
@@ -163,12 +163,14 @@ private struct MimiCommand {
         signal(SIGTERM, handleTerminationSignal)
 
         let startedAt = Date()
-        showStatus("録音中です。Enterで終了します（最長60秒）。")
+        showStatus("録音中です。何かキーを押すと終了します（最長60秒）。")
         beep()
 
         let stopReason: StopReason
         do {
-            stopReason = try waitForEnter(timeout: maximumRecordingSeconds)
+            let terminalMode = try TerminalInputMode()
+            defer { terminalMode.restore() }
+            stopReason = try waitForKey(timeout: maximumRecordingSeconds)
         } catch {
             recorder.stop()
             signal(SIGINT, SIG_DFL)
@@ -260,7 +262,7 @@ private struct MimiCommand {
         }
     }
 
-    private static func waitForEnter(timeout: TimeInterval) throws -> StopReason {
+    private static func waitForKey(timeout: TimeInterval) throws -> StopReason {
         let deadline = Date().addingTimeInterval(timeout)
         var descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
 
@@ -295,9 +297,11 @@ private struct MimiCommand {
                     }
                     throw MimiError.inputFailed(String(cString: strerror(errno)))
                 }
-                if byte == 10 || byte == 13 {
-                    return .enter
-                }
+                // Function and arrow keys can arrive as a multi-byte escape
+                // sequence. Discard the remainder so it does not leak into the
+                // shell after the terminal mode is restored.
+                tcflush(STDIN_FILENO, TCIFLUSH)
+                return .key
             }
 
             if descriptor.revents & Int16(POLLERR | POLLHUP | POLLNVAL) != 0 {
@@ -392,17 +396,17 @@ private struct MimiCommand {
 
     private static func printHelp() {
         print("""
-        mimi \(version) — macOS 音声入力CLI
+        mi \(version) — macOS 音声入力CLI
 
         使い方:
-          mimi             録音を開始し、Enterで終了して文字起こし
-          mimi --check     APIキーとマイク権限を確認
-          mimi --version   バージョンを表示
-          mimi --help      このヘルプを表示
+          mi             録音を開始し、任意のキーで終了して文字起こし
+          mi --check     APIキーとマイク権限を確認
+          mi --version   バージョンを表示
+          mi --help      このヘルプを表示
 
         成功時は文字起こし本文だけを標準出力へ出し、同時に
         macOSのクリップボードへコピーします。manoでは Ctrl-T を押し、
-        mimi と入力するとカーソル位置へ結果を挿入できます。
+        mi と入力するとカーソル位置へ結果を挿入できます。
         """)
     }
 
@@ -422,7 +426,7 @@ private struct MimiCommand {
             microphone = "不明"
         }
 
-        print("mimi \(version) (macOS)")
+        print("mi \(version) (macOS)")
         do {
             let key = try APIKeyProvider.resolve(environment: ProcessInfo.processInfo.environment)
             print("OPENAI_API_KEY: \(key.value.isEmpty ? "未設定" : "設定済み（\(key.source)）")")
@@ -450,7 +454,7 @@ private struct MimiCommand {
     }
 
     private static func writeError(_ message: String) {
-        FileHandle.standardError.write(Data(("mimi: " + message + "\n").utf8))
+        FileHandle.standardError.write(Data(("mi: " + message + "\n").utf8))
     }
 
     private static func beep() {
@@ -463,6 +467,36 @@ private struct MimiCommand {
             return nil
         }
         return trimmed
+    }
+}
+
+private final class TerminalInputMode {
+    private var original: termios
+    private var isActive = false
+
+    init() throws {
+        var attributes = termios()
+        guard tcgetattr(STDIN_FILENO, &attributes) == 0 else {
+            throw MimiError.inputFailed(String(cString: strerror(errno)))
+        }
+
+        original = attributes
+        cfmakeraw(&attributes)
+        guard tcsetattr(STDIN_FILENO, TCSANOW, &attributes) == 0 else {
+            throw MimiError.inputFailed(String(cString: strerror(errno)))
+        }
+        isActive = true
+    }
+
+    func restore() {
+        guard isActive else { return }
+        var attributes = original
+        tcsetattr(STDIN_FILENO, TCSANOW, &attributes)
+        isActive = false
+    }
+
+    deinit {
+        restore()
     }
 }
 
