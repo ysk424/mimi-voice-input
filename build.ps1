@@ -53,6 +53,7 @@ $sources = @(
     "TrayApplicationContext.cs",
     "MainForm.cs",
     "Services\MciAudioRecorder.cs",
+    "Services\WaveAudio.cs",
     "Services\OpenAiTranscriptionClient.cs",
     "Properties\AssemblyInfo.cs"
 )

@@ -51,9 +51,14 @@ namespace Mimi.Services
 
             try
             {
-                Send("stop " + _alias);
-                Send("save " + _alias + " \"" + outputPath + "\"");
+                Send("stop " + _alias + " wait");
+                Send("save " + _alias + " \"" + outputPath + "\" wait");
                 return outputPath;
+            }
+            catch
+            {
+                try { File.Delete(outputPath); } catch { }
+                throw;
             }
             finally
             {

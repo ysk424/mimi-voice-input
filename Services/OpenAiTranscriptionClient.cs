@@ -48,7 +48,11 @@ namespace Mimi.Services
             byte[] audioBytes;
             try
             {
-                audioBytes = File.ReadAllBytes(wavePath);
+                audioBytes = WaveAudio.ReadForTranscription(wavePath);
+            }
+            catch (InvalidDataException)
+            {
+                throw;
             }
             catch (Exception exception)
             {

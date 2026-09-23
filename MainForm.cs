@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Threading.Tasks;
@@ -21,7 +20,6 @@ namespace Mimi
         private readonly Button _copyButton;
         private readonly MciAudioRecorder _recorder = new MciAudioRecorder();
         private readonly OpenAiTranscriptionClient _transcriptionClient = new OpenAiTranscriptionClient();
-        private readonly Stopwatch _recordingTimer = new Stopwatch();
 
         private bool _allowExit;
         private bool _isRecording;
@@ -167,6 +165,22 @@ namespace Mimi
             CancelRecording();
         }
 
+        protected override void OnVisibleChanged(EventArgs eventArgs)
+        {
+            // Both tray activation and a second executable launch can show this
+            // resident window. Start a fresh memo only when it becomes visible.
+            if (Visible && _textBox != null && !_isRecording && !_isTranscribing)
+            {
+                _textBox.Clear();
+                _textBox.ClearUndo();
+                _insertionStart = 0;
+                _insertionLength = 0;
+                UpdateReadyStatus();
+            }
+
+            base.OnVisibleChanged(eventArgs);
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -255,7 +269,6 @@ namespace Mimi
             try
             {
                 _recorder.Start();
-                _recordingTimer.Restart();
                 _isRecording = true;
                 _pttButton.Text = "●  録音中… 離すと送信";
                 _pttButton.BackColor = Color.FromArgb(239, 91, 91);
@@ -283,24 +296,21 @@ namespace Mimi
             }
 
             _isRecording = false;
-            _recordingTimer.Stop();
+            SetTranscribing(true);
             ResetPttAppearance();
 
             string wavePath = null;
             try
             {
                 wavePath = _recorder.StopAndSave();
-                if (_recordingTimer.ElapsedMilliseconds < 180)
-                {
-                    _statusLabel.Text = "短すぎたため送信しませんでした";
-                    return;
-                }
-
-                SetTranscribing(true);
                 _statusLabel.Text = "日本語に文字起こし中…";
 
                 var transcript = await _transcriptionClient.TranscribeJapaneseAsync(wavePath);
                 InsertTranscript(transcript);
+            }
+            catch (InvalidDataException exception)
+            {
+                _statusLabel.Text = exception.Message;
             }
             catch (Exception exception)
             {
@@ -425,7 +435,6 @@ namespace Mimi
             }
 
             _isRecording = false;
-            _recordingTimer.Reset();
             _recorder.Cancel();
             ResetPttAppearance();
         }

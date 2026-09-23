@@ -48,6 +48,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\MciAudioRecorder.cs" />
+    <Compile Include="Services\WaveAudio.cs" />
     <Compile Include="Services\OpenAiTranscriptionClient.cs" />
     <Compile Include="TrayApplicationContext.cs" />
   </ItemGroup>
