@@ -63,9 +63,17 @@ internal static class SmokeTests
                 Assert(((Label)GetField(formType, form, "_countLabel")).Text == "0 / 400",
                     "Reopening must reset the character count.");
 
+                // Opening an already visible window from tray must clear the previous memo.
                 textBox.Text = "編集中";
-                ShowWindow(form.Handle, 4);
-                Assert(textBox.Text == "編集中", "Activating an already visible window must preserve text.");
+                formType.GetMethod("ShowFromTray").Invoke(form, null);
+                Assert(textBox.TextLength == 0, "Opening an already visible window from tray must clear the previous memo.");
+
+                // Activating via relaunch message must clear the previous memo even if already visible.
+                textBox.Text = "前の文章";
+                var wmActivateAndReset = (int)formType.GetField("WmActivateAndReset", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public).GetValue(null);
+                var message = Message.Create(form.Handle, wmActivateAndReset, IntPtr.Zero, IntPtr.Zero);
+                formType.GetMethod("WndProc", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(form, new object[] { message });
+                Assert(textBox.TextLength == 0, "Activating via relaunch message must clear the previous memo.");
 
                 form.Hide();
                 form.Show(); // Same managed visibility path as ShowFromTray.
@@ -78,7 +86,7 @@ internal static class SmokeTests
                     SetField(formType, form, "_insertionLength", 2);
                     form.Hide();
                     SetField(formType, form, busyFlag, true);
-                    ShowWindow(form.Handle, 4);
+                    formType.GetMethod("ShowFromTray").Invoke(form, null);
                     Assert(textBox.Text == "処理中の文章", "Reopening while busy must preserve text.");
                     Assert((int)GetField(formType, form, "_insertionStart") == 3,
                         "Reopening while busy must preserve the insertion position.");

@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Mimi.Services;
@@ -10,6 +11,8 @@ namespace Mimi
     internal sealed class MainForm : Form
     {
         public const string WindowTitle = "mimi — GPT/Codex 音声入力メモ";
+        public const string ActivateAndResetMessageName = "Mimi-ActivateAndReset";
+        internal static readonly int WmActivateAndReset = RegisterWindowMessage(ActivateAndResetMessageName);
         private const int MaximumCharacters = 400;
 
         private readonly RichTextBox _textBox;
@@ -139,6 +142,8 @@ namespace Mimi
 
         public void ShowFromTray()
         {
+            ResetEditor();
+
             if (!Visible)
             {
                 Show();
@@ -165,20 +170,45 @@ namespace Mimi
             CancelRecording();
         }
 
-        protected override void OnVisibleChanged(EventArgs eventArgs)
+        public void ResetEditor()
         {
-            // Both tray activation and a second executable launch can show this
-            // resident window. Start a fresh memo only when it becomes visible.
-            if (Visible && _textBox != null && !_isRecording && !_isTranscribing)
+            if (_isRecording || _isTranscribing)
+            {
+                return;
+            }
+
+            if (_textBox != null)
             {
                 _textBox.Clear();
                 _textBox.ClearUndo();
-                _insertionStart = 0;
-                _insertionLength = 0;
-                UpdateReadyStatus();
+            }
+
+            _insertionStart = 0;
+            _insertionLength = 0;
+            UpdateReadyStatus();
+        }
+
+        protected override void OnVisibleChanged(EventArgs eventArgs)
+        {
+            // Both tray activation and a second executable launch can show this
+            // resident window. Start a fresh memo when it becomes visible.
+            if (Visible)
+            {
+                ResetEditor();
             }
 
             base.OnVisibleChanged(eventArgs);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WmActivateAndReset && WmActivateAndReset != 0)
+            {
+                ShowFromTray();
+                return;
+            }
+
+            base.WndProc(ref m);
         }
 
         protected override void Dispose(bool disposing)
@@ -478,5 +508,8 @@ namespace Mimi
                 // The file lives in the user's temp directory and can be cleaned up by Windows.
             }
         }
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        internal static extern int RegisterWindowMessage(string message);
     }
 }
